@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="th" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบบันทึกเวลารับ-ส่งเวร ฝ่ายการพยาบาล</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Prompt', sans-serif; }
+        .flower { position: fixed; top: -50px; z-index: 1000; pointer-events: none; animation: fall linear infinite; opacity: 0.6; }
+        @keyframes fall { 0% { transform: translateY(-50px) rotate(0deg); opacity: 0.8; } 100% { transform: translateY(100vh) rotate(360deg); opacity: 0; } }
+        .card-3d { background: white; border-radius: 1.5rem; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1); }
+        .btn-hover:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .shift-btn.active { border-color: #ec4899; background-color: #fdf2f8; border-width: 3px; transform: scale(1.02); }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .dropdown-content { max-height: 250px; overflow-y: auto; z-index: 50; border-radius: 1rem; border: 1px solid #e2e8f0; }
+    </style>
+</head>
+<body class="h-full bg-slate-50 text-slate-800">
+
+    <script>
+        // Web App URL จาก Google Apps Script ของคุณมลทิรา
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwy41jwqOjatNpmwUfakzlw3lLgPu9t97SfOEc6lRFq0djg3aQa4hIg5d5QsotSLKC6Xw/exec"; 
+    </script>
+
+    <div id="app" class="min-h-full">
+        <!-- Home Page -->
+        <div id="home-page" class="min-h-screen flex flex-col items-center justify-center p-6">
+            <div class="text-center space-y-4 mb-10">
+                <div class="text-8xl animate-bounce">👩‍⚕️</div>
+                <h1 class="text-3xl md:text-5xl font-bold bg-gradient-to-r from-pink-500 to-violet-600 bg-clip-text text-transparent">บันทึกเวลารับ-ส่งเวร</h1>
+                <p class="text-slate-500">หน่วยงานในฝ่ายการพยาบาล</p>
+            </div>
+            <div class="w-full max-w-sm space-y-4">
+                <button onclick="showPage('form-page')" class="btn-hover w-full py-5 bg-pink-500 text-white rounded-2xl font-bold text-xl shadow-lg transition-all flex items-center justify-center gap-3">
+                    <span>📋</span> ลงบันทึกเวลา
+                </button>
+                <button onclick="showPage('admin-login')" class="btn-hover w-full py-5 bg-white text-slate-600 border border-slate-200 rounded-2xl font-bold text-xl shadow-sm transition-all flex items-center justify-center gap-3">
+                    <span>🔐</span> Admin Dashboard
+                </button>
+            </div>
+        </div>
+
+        <!-- Form Page -->
+        <div id="form-page" class="hidden min-h-screen p-4 md:p-8">
+            <div class="max-w-xl mx-auto">
+                <div class="flex items-center gap-4 mb-8">
+                    <button onclick="showPage('home-page')" class="p-3 bg-white rounded-full shadow-md hover:bg-slate-50 transition-all">🏠</button>
+                    <h2 class="text-2xl font-bold text-slate-700">แบบฟอร์มบันทึกข้อมูล</h2>
+                </div>
+
+                <div class="card-3d p-6 md:p-8 space-y-6">
+                    <!-- Unit Search -->
+                    <div class="space-y-2 relative">
+                        <label class="font-semibold text-slate-600">🏥 หน่วยงาน (พิมพ์ค้นหาได้เลย)</label>
+                        <input type="text" id="unit-search-input" onfocus="handleUnitSearch(this.value)" oninput="handleUnitSearch(this.value)" placeholder="เช่น RA5NE, SDICU..." autocomplete="off" class="w-full p-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-pink-500 outline-none">
+                        <div id="unit-dropdown" class="hidden absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 shadow-xl dropdown-content"></div>
+                        <input type="hidden" id="selected-unit-value">
+                    </div>
+
+                    <div class="space-y-2">
+                        <label class="font-semibold text-slate-600">📅 วันที่เริ่มส่งเวร</label>
+                        <input type="date" id="start-date" class="w-full p-4 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-pink-500">
+                    </div>
+
+                    <div class="space-y-2">
+                        <label class="font-semibold text-slate-600">⏰ ช่วงเวลาการส่งเวร</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button onclick="setShift('เช้าส่งบ่าย')" class="shift-btn border-2 p-3 rounded-xl flex flex-col items-center hover:bg-slate-50 transition-all" id="btn-m">
+                                <span class="text-2xl">🌅</span><span class="text-[10px] md:text-xs">เช้า-บ่าย</span>
+                            </button>
+                            <button onclick="setShift('บ่ายส่งดึก')" class="shift-btn border-2 p-3 rounded-xl flex flex-col items-center hover:bg-slate-50 transition-all" id="btn-a">
+                                <span class="text-2xl">🌆</span><span class="text-[10px] md:text-xs">บ่าย-ดึก</span>
+                            </button>
+                            <button onclick="setShift('ดึกส่งเช้า')" class="shift-btn border-2 p-3 rounded-xl flex flex-col items-center hover:bg-slate-50 transition-all" id="btn-n">
+                                <span class="text-2xl">🌙</span><span class="text-[10px] md:text-xs">ดึก-เช้า</span>
+                            </button>
+                        </div>
+                        <input type="hidden" id="selected-shift">
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <label class="font-semibold text-slate-600">▶️ เวลาเริ่มส่งเวร</label>
+                            <input type="time" id="start-time" class="w-full p-4 rounded-xl border border-slate-200 outline-none">
+                        </div>
+                        <div class="space-y-2">
+                            <label class="font-semibold text-slate-600">⏹️ เวลาเสร็จสิ้น</label>
+                            <input type="time" id="end-time" class="w-full p-4 rounded-xl border border-slate-200 outline-none">
+                        </div>
+                    </div>
+
+                    <!-- End Date for Afternoon Shift -->
+                    <div id="end-date-container" class="space-y-2 hidden">
+                        <label class="font-semibold text-pink-600">📅 วันที่เสร็จสิ้น (กรณีส่งเวรข้ามวัน)</label>
+                        <input type="date" id="end-date" class="w-full p-4 rounded-xl border-2 border-pink-100 outline-none">
+                    </div>
+
+                    <div class="space-y-2">
+                        <label class="font-semibold text-slate-600">📝 Note / หมายเหตุ</label>
+                        <textarea id="note" rows="2" class="w-full p-4 rounded-xl border border-slate-200 outline-none" placeholder="ระบุข้อมูลเพิ่มเติม..."></textarea>
+                    </div>
+
+                    <button onclick="handleSubmit()" id="btn-submit" class="w-full py-4 bg-gradient-to-r from-pink-500 to-violet-500 text-white rounded-xl font-bold text-lg shadow-lg hover:opacity-90 transition-all">บันทึกข้อมูล ✨</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Login -->
+        <div id="admin-login" class="hidden min-h-screen flex flex-col items-center justify-center p-6">
+            <div class="card-3d p-8 w-full max-sm:max-w-xs text-center space-y-6">
+                <div class="text-6xl">🔐</div>
+                <h2 class="text-2xl font-bold">Admin Dashboard</h2>
+                <input type="password" id="admin-pass" class="w-full p-4 rounded-xl border border-slate-200 text-center text-2xl tracking-widest outline-none" placeholder="****">
+                <button onclick="handleLogin()" class="w-full py-4 bg-slate-800 text-white rounded-xl font-bold">เข้าสู่ระบบ</button>
+                <button onclick="showPage('home-page')" class="text-slate-400">ยกเลิก</button>
+            </div>
+        </div>
+
+        <!-- Admin Dashboard -->
+        <div id="dashboard-page" class="hidden min-h-screen p-4 md:p-8 space-y-6">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div class="flex items-center gap-3">
+                    <button onclick="showPage('home-page')" class="p-2 bg-white rounded-full shadow-sm">🏠</button>
+                    <h1 class="text-2xl font-bold text-slate-800">สรุปผลการรับ-ส่งเวร</h1>
+                </div>
+                <div class="flex gap-2 w-full md:w-auto">
+                    <button onclick="syncFromSheet()" class="flex-1 md:flex-none px-4 py-2 bg-pink-500 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2">🔄 Sync ข้อมูล</button>
+                    <button onclick="exportToCSV()" class="flex-1 md:flex-none px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-medium">Export CSV</button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
+                <div class="card-3d p-5 flex flex-col border-b-4 border-pink-400">
+                    <span class="text-slate-400 text-xs">จำนวนผู้ตอบทั้งหมด</span>
+                    <span id="stat-total" class="text-3xl font-bold">0</span>
+                </div>
+                <div class="card-3d p-5 flex flex-col border-b-4 border-violet-400">
+                    <span class="text-slate-400 text-xs">จำนวนหน่วยงาน</span>
+                    <span id="stat-units" class="text-3xl font-bold">0</span>
+                </div>
+                <div class="card-3d p-5 flex flex-col border-b-4 border-orange-400">
+                    <span class="text-slate-400 text-xs">เวลาเฉลี่ย (นาที)</span>
+                    <span id="stat-avg" class="text-3xl font-bold text-orange-500">0</span>
+                </div>
+                <div class="card-3d p-5">
+                    <select id="filter-shift" onchange="refreshDashboard()" class="w-full p-2 border rounded-lg text-xs md:text-sm mt-2 outline-none">
+                        <option value="">กรองประเภทเวร (ทั้งหมด)</option>
+                        <option>เช้าส่งบ่าย</option>
+                        <option>บ่ายส่งดึก</option>
+                        <option>ดึกส่งเช้า</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2 card-3d p-6 space-y-4">
+                    <h3 class="font-bold flex items-center gap-2"><span>📊</span> 20 อันดับหน่วยงานที่มีการบันทึกสูงสุด</h3>
+                    <div id="bar-chart-container" class="h-96 overflow-y-auto space-y-3 pr-2"></div>
+                </div>
+                <div class="space-y-6">
+                    <div class="card-3d p-6 border-l-8 border-red-400">
+                        <h3 class="font-bold text-red-600 mb-4">🐢 10 อันดับส่งเวรช้าที่สุด</h3>
+                        <div id="slow-list" class="space-y-2 text-sm"></div>
+                    </div>
+                    <div class="card-3d p-6 border-l-8 border-green-400">
+                        <h3 class="font-bold text-green-600 mb-4">🚀 10 อันดับส่งเวรเร็วที่สุด</h3>
+                        <div id="fast-list" class="space-y-2 text-sm"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-3d p-6 overflow-hidden">
+                <div class="flex flex-col md:flex-row justify-between mb-4 gap-4">
+                    <h3 class="font-bold">ข้อมูลดิบจาก Google Sheets</h3>
+                    <input type="text" id="search-unit" oninput="refreshDashboard()" placeholder="🔍 ค้นหาหน่วยงาน..." class="p-2 border rounded-lg text-sm w-full md:w-64 outline-none focus:border-pink-300">
+                </div>
+                <div class="overflow-x-auto rounded-xl border border-slate-100">
+                    <table class="w-full text-left text-sm min-w-[650px]">
+                        <thead class="bg-slate-50 text-slate-500 uppercase">
+                            <tr>
+                                <th class="p-4">หน่วยงาน</th>
+                                <th class="p-4">วันที่</th>
+                                <th class="p-4">ประเภทเวร</th>
+                                <th class="p-4">ช่วงเวลา</th>
+                                <th class="p-4 text-center">ระยะเวลา (นาที)</th>
+                                <th class="p-4">Note</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-10 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full bg-slate-800 text-white shadow-2xl opacity-0 transition-all pointer-events-none z-[2000] text-center max-w-[90%]"></div>
+
+    <script>
+        const UNITS = [
+            'RAOFM', 'RAOCC', 'RAOAM', 'RAOPH', 'RAOPS', 'RAECT', 'RAOGY', 'RAOOB', 'RAORH', 'RAOER',
+            'RAOOU', 'RAARU', 'RAOGP', 'SDOMD', 'SDODM', 'SDOET', 'SDOSU', 'SDORP', 'SDOEY', 'SDOIU',
+            'SDOSP', 'SDPMD', 'SDPOS', 'SDPOG', 'SDPPD', 'SDPEY', 'SDPET', 'SDPDS', 'SDPPS', 'QSPCM',
+            'RHPK', 'RA5NE', 'RA5SE', 'RA5SW', 'RA9SE', 'RA4TW', 'RA2TP', 'RA2TC', 'RA1RH', 'RA4NE',
+            'RA4NW', 'RA6SW', 'RA3NW', 'RA6NW', 'RA6NE', 'RAHSU1', 'RA6SE', 'RA7SW', 'RA7SE', 'RA9SW',
+            'RA7NE', 'RA1OW', 'RA2OW', 'RA3OW', 'QSPSY', 'RARPU', 'QSIPD71', 'QSIPD72', 'QSIPD81',
+            'QSIPD82', 'QSIPD91', 'QSIPD92', 'QSIPD93', 'SDIPD62', 'SDIPD63', 'SDIPD64', 'SDIPD65',
+            'SDIPD72', 'SDIPD73', 'SDIPD74', 'SDIPD75', 'SDIPD76', 'SDIPD81', 'SDIPD82', 'SDIPD83',
+            'SDIPD85', 'SDIPD86', 'SDNS61', 'SDIPD96', 'RAOPD', 'RA8SE', 'RA8NW', 'RA4SP', 'RA8SW',
+            'RA8NE', 'RA8IC', 'RA9PC', 'RA8NC', 'RA9NE', 'RA1TI', 'RA3IC', 'QS4IC', 'RA4IT', 'RA5IC',
+            'RA5NB', 'RA5NW', 'SDICU51', 'SDHD', 'SDCCU91', 'SDICU92', 'SDICU95', 'QSICU8', 'QSVA04',
+            'RA9IC', 'RA9CC', 'RA7NW', 'RAASU', 'QSHD5', 'SDNICU6', 'RAXSU', 'RAXRP', 'RAXET', 'RAXEY',
+            'RAXGY', 'RAXRR', 'QSXSK', 'RALR4', 'SDLR6', 'SDOR5', 'RASCU', 'RAHHC1', 'SDHHC2', 'RASSS1',
+            'SDSSS2', 'SDLMB', 'SDHCC', 'SDNC', 'SDIVN', 'QSTC', 'RAHTU', 'PCU'
+        ];
+
+        let rawData = [];
+        let currentShift = "";
+
+        function showPage(p) {
+            document.querySelectorAll('#app > div').forEach(d => d.classList.add('hidden'));
+            document.getElementById(p).classList.remove('hidden');
+            window.scrollTo(0,0);
+        }
+
+        function showToast(m) {
+            const t = document.getElementById('toast');
+            t.textContent = m; t.classList.remove('opacity-0');
+            setTimeout(() => t.classList.add('opacity-0'), 4000);
+        }
+
+        function handleUnitSearch(v) {
+            const d = document.getElementById('unit-dropdown');
+            const f = UNITS.filter(u => u.toLowerCase().includes(v.toLowerCase()));
+            if(f.length > 0) {
+                d.innerHTML = f.map(u => `<div onclick="selectUnit('${u}')" class="p-4 hover:bg-pink-50 cursor-pointer border-b border-slate-50 transition-colors">${u}</div>`).join('');
+                d.classList.remove('hidden');
+            } else { 
+                d.innerHTML = '<div class="p-4 text-slate-400 italic">ไม่พบหน่วยงานที่คุณพิมพ์</div>'; 
+                d.classList.remove('hidden'); 
+            }
+        }
+
+        function selectUnit(u) {
+            document.getElementById('unit-search-input').value = u;
+            document.getElementById('selected-unit-value').value = u;
+            document.getElementById('unit-dropdown').classList.add('hidden');
+        }
+
+        function setShift(s) {
+            currentShift = s; 
+            document.getElementById('selected-shift').value = s;
+            document.querySelectorAll('.shift-btn').forEach(b => b.classList.remove('active'));
+            const id = s==='เช้าส่งบ่าย'?'btn-m':s==='บ่ายส่งดึก'?'btn-a':'btn-n';
+            document.getElementById(id).classList.add('active');
+
+            const con = document.getElementById('end-date-container');
+            if(s==='บ่ายส่งดึก') { 
+                con.classList.remove('hidden'); 
+                document.getElementById('end-date').value = document.getElementById('start-date').value;
+            } else { 
+                con.classList.add('hidden'); 
+                document.getElementById('end-date').value = "";
+            }
+        }
+
+        async function handleSubmit() {
+            const unit = document.getElementById('selected-unit-value').value;
+            const startDate = document.getElementById('start-date').value;
+            const endDateInput = document.getElementById('end-date').value;
+            const shift = document.getElementById('selected-shift').value;
+            const startTime = document.getElementById('start-time').value;
+            const endTime = document.getElementById('end-time').value;
+            const note = document.getElementById('note').value;
+
+            if(!unit || !startDate || !shift || !startTime || !endTime) { 
+                showToast("⚠️ กรุณาระบุหน่วยงานและข้อมูลให้ครบถ้วนก่อนบันทึก"); 
+                return; 
+            }
+
+            const finalEndDate = endDateInput || startDate;
+            const startDt = new Date(`${startDate}T${startTime}`);
+            const endDt = new Date(`${finalEndDate}T${endTime}`);
+            let duration = Math.floor((endDt - startDt)/(1000*60));
+            if(duration < 0) duration += 1440; // กรณีข้ามวันแต่อัตโนมัติ
+
+            const btn = document.getElementById('btn-submit');
+            btn.disabled = true; btn.textContent = "กำลังส่งข้อมูลไป Google Sheet...";
+
+            const payload = { unit, startDate, endDate: finalEndDate, shift, startTime, endTime, durationMinutes: duration, note };
+
+            try {
+                // ใช้ fetch แบบ no-cors สำหรับส่งข้อมูลไปยัง Google Script
+                await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                showToast("✅ บันทึกลง Google Sheet สำเร็จแล้วค่ะ!");
+                resetForm();
+                setTimeout(() => showPage('home-page'), 2000);
+            } catch (e) { 
+                console.error(e);
+                showToast("❌ เกิดข้อผิดพลาด ไม่สามารถส่งข้อมูลได้"); 
+            } finally { 
+                btn.disabled = false; btn.textContent = "บันทึกข้อมูล ✨"; 
+            }
+        }
+
+        async function syncFromSheet() {
+            showToast("⏳ กำลังโหลดข้อมูลล่าสุดจาก Google Sheets...");
+            try {
+                const res = await fetch(GOOGLE_SCRIPT_URL);
+                rawData = await res.json();
+                refreshDashboard();
+                showToast("✨ อัปเดตข้อมูลสำเร็จ เรียบร้อยแล้วค่ะ");
+            } catch (e) { 
+                console.error(e);
+                showToast("❌ ไม่สามารถดึงข้อมูลได้ โปรดตรวจสอบสิทธิ์การเข้าถึง"); 
+            }
+        }
+
+        function refreshDashboard() {
+            const shiftF = document.getElementById('filter-shift').value;
+            const searchF = document.getElementById('search-unit').value.toLowerCase();
+            let data = [...rawData];
+
+            if(shiftF) data = data.filter(d => d.shift === shiftF);
+            if(searchF) data = data.filter(d => d.unit.toLowerCase().includes(searchF));
+
+            document.getElementById('stat-total').textContent = data.length;
+            document.getElementById('stat-units').textContent = [...new Set(data.map(d => d.unit))].length;
+            const totalDur = data.reduce((s, d) => s + (Number(d.durationMinutes)||0), 0);
+            document.getElementById('stat-avg').textContent = data.length > 0 ? (totalDur/data.length).toFixed(1) : 0;
+
+            renderCharts(data); 
+            renderRankings(data); 
+            renderTable(data);
+        }
+
+        function renderCharts(data) {
+            const counts = {}; 
+            data.forEach(d => counts[d.unit] = (counts[d.unit]||0)+1);
+            const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0, 20);
+            const con = document.getElementById('bar-chart-container');
+            
+            if(sorted.length===0) { 
+                con.innerHTML = '<div class="text-slate-300 italic text-center py-20">ยังไม่มีข้อมูลที่จะแสดง</div>'; 
+                return; 
+            }
+            const max = sorted[0][1];
+            con.innerHTML = sorted.map(([u, c]) => `
+                <div class="space-y-1">
+                    <div class="flex justify-between text-[10px] md:text-xs">
+                        <span class="font-medium">${u}</span>
+                        <span class="text-slate-400">${c} ครั้ง</span>
+                    </div>
+                    <div class="w-full bg-slate-100 rounded-full h-3">
+                        <div class="bg-gradient-to-r from-pink-400 to-violet-400 h-3 rounded-full transition-all duration-1000" style="width: ${(c/max*100)}%"></div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderRankings(data) {
+            const stats = {};
+            data.forEach(d => {
+                if(!stats[d.unit]) stats[d.unit] = {sum:0, count:0};
+                stats[d.unit].sum += Number(d.durationMinutes);
+                stats[d.unit].count += 1;
+            });
+            const avgs = Object.entries(stats).map(([u, s]) => ({ u, avg: (s.sum/s.count).toFixed(1) }));
+            
+            const slow = [...avgs].sort((a,b)=>b.avg-a.avg).slice(0, 10);
+            document.getElementById('slow-list').innerHTML = slow.map(s => `<div class="flex justify-between p-2 rounded bg-red-50 text-[11px] md:text-sm"><span>${s.u}</span><span class="font-bold text-red-600">${s.avg} นาที</span></div>`).join('') || "ไม่มีข้อมูล";
+            
+            const fast = [...avgs].sort((a,b)=>a.avg-b.avg).slice(0, 10);
+            document.getElementById('fast-list').innerHTML = fast.map(s => `<div class="flex justify-between p-2 rounded bg-green-50 text-[11px] md:text-sm"><span>${s.u}</span><span class="font-bold text-green-600">${s.avg} นาที</span></div>`).join('') || "ไม่มีข้อมูล";
+        }
+
+        function renderTable(data) {
+            // เรียงข้อมูลล่าสุดขึ้นก่อน
+            const tableData = [...data].reverse();
+            document.getElementById('table-body').innerHTML = tableData.map(d => `
+                <tr class="border-b hover:bg-slate-50 transition-colors">
+                    <td class="p-4 font-semibold text-slate-700">${d.unit}</td>
+                    <td class="p-4 text-slate-500 text-xs">${d.startDate}</td>
+                    <td class="p-4">
+                        <span class="px-2 py-0.5 rounded-full text-[9px] font-bold ${d.shift==='เช้าส่งบ่าย'?'bg-orange-100 text-orange-600':d.shift==='บ่ายส่งดึก'?'bg-indigo-100 text-indigo-600':'bg-slate-800 text-white'}">
+                            ${d.shift}
+                        </span>
+                    </td>
+                    <td class="p-4 text-slate-500 text-xs">${d.startTime} - ${d.endTime}</td>
+                    <td class="p-4 text-pink-600 font-bold text-center">${d.durationMinutes}</td>
+                    <td class="p-4 text-slate-400 text-[10px] italic truncate max-w-[150px]" title="${d.note}">${d.note || '-'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function resetForm() {
+            document.getElementById('unit-search-input').value = ""; 
+            document.getElementById('selected-unit-value').value = "";
+            document.getElementById('start-date').value = new Date().toISOString().split('T')[0];
+            document.getElementById('selected-shift').value = ""; 
+            document.getElementById('note').value = "";
+            document.querySelectorAll('.shift-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('end-date-container').classList.add('hidden');
+        }
+
+        function handleLogin() { 
+            if(document.getElementById('admin-pass').value === '0079') { 
+                showPage('dashboard-page'); 
+                syncFromSheet(); 
+            } else {
+                showToast("❌ รหัสผ่านไม่ถูกต้อง โปรดลองอีกครั้ง"); 
+            }
+        }
+
+        function exportToCSV() {
+            if(rawData.length===0) return;
+            const head = ["หน่วยงาน", "วันที่เริ่ม", "วันที่เสร็จ", "ประเภทเวร", "เวลาเริ่ม", "เวลาจบ", "ระยะเวลา(นาที)", "หมายเหตุ"];
+            const csv = "\uFEFF" + head.join(",") + "\n" + rawData.map(d => [d.unit, d.startDate, d.endDate, d.shift, d.startTime, d.endTime, d.durationMinutes, `"${d.note}"`].join(",")).join("\n");
+            const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+            const link = document.createElement("a"); 
+            link.href = URL.createObjectURL(blob); 
+            link.download = `handover_report_${new Date().toISOString().split('T')[0]}.csv`; 
+            link.click();
+        }
+
+        // Initialize
+        document.getElementById('start-date').value = new Date().toISOString().split('T')[0];
+        
+        // Falling Flowers Background
+        function createFlowers() {
+            const emojis = ['🌸', '🌷', '🌺', '🌼'];
+            setInterval(() => {
+                const f = document.createElement('div');
+                f.className = 'flower';
+                f.textContent = emojis[Math.floor(Math.random()*emojis.length)];
+                f.style.left = Math.random() * 100 + 'vw';
+                f.style.fontSize = (Math.random() * 20 + 10) + 'px';
+                f.style.animationDuration = (Math.random() * 3 + 5) + 's';
+                document.body.appendChild(f);
+                setTimeout(() => f.remove(), 8000);
+            }, 1000);
+        }
+        createFlowers();
+
+        // Close dropdown when click outside
+        window.onclick = function(event) {
+            if (!event.target.matches('#unit-search-input')) {
+                document.getElementById('unit-dropdown').classList.add('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
